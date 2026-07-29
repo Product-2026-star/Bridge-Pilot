@@ -222,8 +222,8 @@
 
 <script>
 /* ============================================================
-   CONFIG — fill these in after deploying bridge-backend.gs
-   See SETUP-STEPS.md
+   CONFIG — fill this in after deploying bridge-backend-v2.gs
+   See SETUP-STEPS.md / MIGRATION-STEPS.md
    ============================================================ */
 const BACKEND_URL = "https://script.google.com/macros/s/AKfycbziEqs_dXOMnEG89IrvBi0oxc8JmyfZgsHwlPozuZZtoTvTGGtZSEImZCGTfxedKeuoMQ/exec";
 const API_KEY = "bridge-pilot-2026";
@@ -232,25 +232,10 @@ function isConfigured(){
   return BACKEND_URL && !BACKEND_URL.includes("PASTE_YOUR");
 }
 
-/* ============ CONSTANTS ============ */
-const TEAM_MEMBERS = [
-  "Anjali Mehta","Bhavesh Solanki","Chirag Desai","Devanshi Trivedi","Falguni Rawal",
-  "Gaurav Joshi","Harshad Vyas","Isha Kapadia","Jignesh Patel","Kavya Iyer",
-  "Lalit Chauhan","Manisha Bhatt","Nikhil Shah","Omkar Pandya","Priya Sharma"
-];
-
-const DOC_KEYWORDS = [
-  {keys:["salary slip","salary slips","payslip"], type:"Latest Salary Slip (3 months)"},
-  {keys:["bank statement","bank stmt","account statement"], type:"Bank Statement (6 months)"},
-  {keys:["gst"], type:"GST Certificate"},
-  {keys:["itr","income tax return"], type:"ITR (2 years)"},
-  {keys:["aadhaar","aadhar"], type:"Aadhaar Card"},
-  {keys:["pan card","pan number","pan "], type:"PAN Card"},
-  {keys:["address proof","residence proof","utility bill"], type:"Address Proof"},
-  {keys:["photograph","photo "], type:"Photograph"}
-];
-const URGENT_WORDS = ["urgent","immediately","asap","priority","today itself"];
-const LOW_PRIORITY_WORDS = ["whenever","no rush","low priority","not urgent"];
+/* ============ REAL LISTS (from your data) ============ */
+const TEAM_MEMBERS = ["Dipen Raval (VPD)","Jaymin Thakkar (VPD)","Harshil Rana (VPD)","Anish Jha (VPD)","Milan (VPD)","Rupen Gujarati (VPD)","Sagar (FIPD)","Gulab (FIPD)","Mayur Patel (FIPD)","Kamesh (FIPD)","Jitesh (FIPD)"];
+const STANDARD_DOCUMENTS = ["Applicant Name incorrect","Co applicant name incorrect","Update Applicant address","Co applicant  Address","Update Applicant DOB","Co applicant  DOB","Incorrect bank details","Update reference details","Updated Banking","Live Photo of applicant","Live photo of co applicant","Proper House photo required","Self Declaration applicant/co app/guarantor","Affidavit applicant/co app/guarantor","Electricity Bill Required","Tax Bill Required","Bill Payment receipt","Upload clear KYC of applicant at lead","Upload clear KYC of co- applicant at lead","Guarantor Required","Additional Income earner details required","Additional Bank statement required","SOA Required","Closure letter/NOC required","Income proof","Salary slip","ITR Required","Purchase/Sale invoices","Milk Statement","GST registration","MSME/Udhyam adhaar","Shop Act/Ghumasta license","Marriage certificate","Death Certificate","Child birth certificate","Clear Documents","Pahal JLG closure/BM consent letter","Cibil Retrigger of App/Coapp/guarantor","Single Cibil/Offline Cibil","Relation Match Proof","Consent letter signed","Overdue/ Recent Loan Closed Clearance","Proper Address in Login"];
+const BRANCHES = ["AHMEDABAD","AHMEDABAD 2","Attur","Babra","Badnagar","BHAVNAGAR","Bhavnagar 2","Bhopal","BORSAD","Chennai","INDORE","JAMNAGAR","JODHPUR","Kathlal","KHERALU","KHERGAM","KHEROJ IL","KUTCH NEW","MAHUVA","Mandsaur","MHOW","MORBI","Namakkal","NAVSARI","PALANPUR","PALITANA","PETLAD","RAJKOT","SANWER","Sehore","SURAT","SURENDRANAGAR","Thiruvallur","UDAIPUR","UJJAIN","VADODARA","VAPI","Villupuram"];
 
 /* ============ STATE ============ */
 let state = {
@@ -259,25 +244,16 @@ let state = {
   selectedCustomerFile: null,
   loading: true,
   syncError: null,
-  parseLoading: false,
-  parseError: null,
-  parseResult: null
+  formError: null
 };
 
 /* ============ BACKEND SYNC ============ */
 async function loadFiles(){
-  if(!isConfigured()){
-    state.loading = false;
-    render();
-    return;
-  }
+  if(!isConfigured()){ state.loading = false; render(); return; }
   try{
     const res = await fetch(BACKEND_URL);
     const data = await res.json();
-    if(Array.isArray(data)){
-      state.files = data;
-      state.syncError = null;
-    }
+    if(Array.isArray(data)){ state.files = data; state.syncError = null; }
   }catch(err){
     state.syncError = "Couldn't reach the shared sheet (" + err.message + "). Check your connection and BACKEND_URL.";
   }
@@ -290,7 +266,7 @@ async function pushFile(file){
   try{
     await fetch(BACKEND_URL, {
       method: "POST",
-      headers: {"Content-Type": "text/plain;charset=utf-8"}, // avoids CORS preflight against Apps Script
+      headers: {"Content-Type": "text/plain;charset=utf-8"},
       body: JSON.stringify({key: API_KEY, file})
     });
     state.syncError = null;
@@ -300,7 +276,7 @@ async function pushFile(file){
   }
 }
 
-/* ============ TIME / STATUS HELPERS (real timestamps, not simulated days) ============ */
+/* ============ TIME / STATUS HELPERS ============ */
 function ageOf(f){
   const end = f.resolvedAt || Date.now();
   return Math.max(0, Math.floor((end - f.raisedAt) / 86400000));
@@ -317,28 +293,6 @@ function avgAge(){
   const active = state.files.filter(f=>f.status!=="resubmitted");
   if(active.length===0) return 0;
   return (active.reduce((s,f)=>s+ageOf(f),0)/active.length).toFixed(1);
-}
-
-/* ============ LOCAL QUERY PARSER (no network dependency for this step) ============ */
-function parseRemarkLocally(remark){
-  const sentences = remark.split(/(?<=[.;])\s+|\n/).map(s=>s.trim()).filter(Boolean);
-  const found = [];
-  const seenTypes = new Set();
-  sentences.forEach(sentence=>{
-    const lower = sentence.toLowerCase();
-    DOC_KEYWORDS.forEach(entry=>{
-      if(entry.keys.some(k=>lower.includes(k)) && !seenTypes.has(entry.type)){
-        seenTypes.add(entry.type);
-        found.push({type:entry.type, reason: sentence});
-      }
-    });
-  });
-  if(found.length===0) found.push({type:"Additional Document (specify with RM)", reason: remark});
-  const lowerRemark = remark.toLowerCase();
-  let urgency_days = 5;
-  if(URGENT_WORDS.some(w=>lowerRemark.includes(w))) urgency_days = 3;
-  else if(LOW_PRIORITY_WORDS.some(w=>lowerRemark.includes(w))) urgency_days = 7;
-  return {documents:found, urgency_days};
 }
 
 /* ============ RING SVG ============ */
@@ -401,7 +355,7 @@ function renderConsole(){
 
     return `<div class="card">
       <div class="card-top">
-        <div><div class="who">${f.applicant}</div><div class="fid mono">${f.id}</div><div style="font-size:11px;color:var(--ink-faint);margin-top:2px;">${f.raisedBy||"—"}</div></div>
+        <div><div class="who">${f.applicant}</div><div class="fid mono">${f.id}</div><div style="font-size:11px;color:var(--ink-faint);margin-top:2px;">${f.raisedBy||"—"} · ${f.branch||"—"}</div></div>
         ${f.status==="resubmitted" ? `<div style="font-size:22px">✅</div>` : ring(age)}
       </div>
       ${badge}
@@ -413,14 +367,14 @@ function renderConsole(){
 
   const configWarning = !isConfigured() ? `
     <div class="note-strip" style="background:var(--bad-bg);border-color:var(--bad);color:var(--bad);">
-      <b>Backend not connected.</b> Set <code>BACKEND_URL</code> at the top of this file's script section to your deployed Google Apps Script Web App URL — see SETUP-STEPS.md. Until then, nothing syncs between team members.
+      <b>Backend not connected.</b> Set <code>BACKEND_URL</code> at the top of this file's script section to your deployed Google Apps Script Web App URL.
     </div>` : "";
   const syncWarning = state.syncError ? `<div class="note-strip" style="background:var(--warn-bg);border-color:var(--warn);color:var(--warn);">${state.syncError}</div>` : "";
 
   return `
     ${configWarning}
     ${syncWarning}
-    <div class="note-strip"><b>Live pilot data.</b> This reads from and writes to your shared Google Sheet — every credit team member sees the same queue. Refreshes automatically every 30 seconds, or click <b>Refresh</b> in the header.</div>
+    <div class="note-strip"><b>Live pilot data.</b> Reads from and writes to your shared Google Sheet — every credit team member sees the same queue. Refreshes automatically every 30 seconds, or click <b>Refresh</b> in the header.</div>
     ${kpis}
     <h2 class="section-title">Live Queue <span class="count">${state.files.length} files</span></h2>
     ${state.loading ? `<div class="empty-state">Loading shared data…</div>` : (state.files.length ? `<div class="grid-cards">${cards}</div>` : `<div class="empty-state">No files logged yet. Raise a query to get started.</div>`)}
@@ -429,35 +383,40 @@ function renderConsole(){
 
 /* ============ RAISE QUERY ============ */
 function renderQuery(){
+  const memberOptions = TEAM_MEMBERS.map(m=>`<option value="${m}">${m}</option>`).join("");
+  const branchOptions = BRANCHES.map(b=>`<option value="${b}">${b}</option>`).join("");
+  const docChecklist = STANDARD_DOCUMENTS.map((d,i)=>
+    `<label style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;font-weight:400;color:var(--ink);padding:5px 0;cursor:pointer;">
+       <input type="checkbox" class="doc-check" value="${d.replace(/"/g,'&quot;')}" style="margin-top:2px;">
+       <span>${d}</span>
+     </label>`
+  ).join("");
+
   return `
   <div class="panel">
     <h2 class="section-title">Credit Team — Raise a Document Query</h2>
     <div class="two-col">
       <div>
         <label>Raised by (credit team member)</label>
-        <select id="q-teammember">${TEAM_MEMBERS.map(m=>`<option value="${m}">${m}</option>`).join("")}</select>
+        <select id="q-teammember">${memberOptions}</select>
+        <label>Branch</label>
+        <select id="q-branch">${branchOptions}</select>
         <label>File ID</label>
         <input type="text" id="q-fileid" placeholder="e.g. FL-10301">
         <label>Applicant Name</label>
         <input type="text" id="q-applicant" placeholder="e.g. Nilesh Rana">
-        <label>Credit remark (write it exactly as you normally would)</label>
-        <textarea id="q-remark" placeholder="e.g. Salary slip submitted is old, need latest 3 months. Also bank statement account number not matching application for this customer."></textarea>
-        <button class="btn-primary" id="q-submit" onclick="processQuery()">${state.parseLoading?'<span class="spinner"></span>Structuring…':'Process Query'}</button>
+        <label>Additional remark (optional — case-specific context)</label>
+        <textarea id="q-remark" placeholder="e.g. Account number on statement doesn't match application."></textarea>
       </div>
       <div>
-        ${state.parseError ? `<div class="result-box" style="border-color:var(--bad);background:var(--bad-bg);color:var(--bad);">${state.parseError}</div>` : ""}
-        ${state.parseResult ? renderParseResult(state.parseResult) : `<div class="empty-state">The structured checklist generated from the remark will appear here, then sync to the shared sheet and route to the Customer Channel.</div>`}
+        <label>Select all that apply</label>
+        <div style="border:1px solid var(--border);border-radius:9px;padding:10px 14px;max-height:280px;overflow-y:auto;background:#FBFCFD;margin-bottom:16px;">
+          ${docChecklist}
+        </div>
+        ${state.formError ? `<div class="result-box" style="border-color:var(--bad);background:var(--bad-bg);color:var(--bad);margin-bottom:12px;">${state.formError}</div>` : ""}
+        <button class="btn-primary" onclick="processQuery()">Raise Query</button>
       </div>
     </div>
-  </div>`;
-}
-
-function renderParseResult(r){
-  const docs = r.documents.map(d=>`<div class="result-doc"><div class="t">${d.type}</div><div class="r">${d.reason}</div></div>`).join("");
-  return `<div class="result-box">
-    <div class="rtitle">Auto-structured · urgency: ${r.urgency_days} day target</div>
-    ${docs}
-    <div style="margin-top:10px;font-size:12px;color:var(--ink-soft);">✓ Synced to shared sheet. Switch to <b>Customer Channel</b> to see it.</div>
   </div>`;
 }
 
@@ -465,34 +424,29 @@ function processQuery(){
   const fileId = document.getElementById("q-fileid").value.trim() || `FL-${Math.floor(10000+Math.random()*89999)}`;
   const applicant = document.getElementById("q-applicant").value.trim() || "Unnamed Applicant";
   const raisedBy = document.getElementById("q-teammember").value;
+  const branch = document.getElementById("q-branch").value;
   const remark = document.getElementById("q-remark").value.trim();
-  if(!remark){ state.parseError = "Enter a credit remark first."; render(); return; }
+  const checked = Array.from(document.querySelectorAll(".doc-check:checked")).map(el=>el.value);
 
-  state.parseLoading = true; state.parseError = null; state.parseResult = null; render();
+  if(checked.length===0){
+    state.formError = "Select at least one document/query type from the checklist.";
+    render();
+    return;
+  }
+  state.formError = null;
 
-  setTimeout(async ()=>{
-    try{
-      const parsed = parseRemarkLocally(remark);
-      state.parseResult = parsed;
-      state.parseLoading = false;
-
-      const newFile = {
-        id: fileId, applicant, raisedBy,
-        raisedAt: Date.now(),
-        status: "awaiting",
-        docs: parsed.documents.map(d=>({type:d.type, reason:d.reason, received:false})),
-        resolvedAt: null
-      };
-      state.files.unshift(newFile);
-      state.selectedCustomerFile = fileId;
-      render();
-      await pushFile(newFile);
-    }catch(err){
-      state.parseLoading = false;
-      state.parseError = "Couldn't parse that remark (" + err.message + "). Try rephrasing it.";
-      render();
-    }
-  }, 400);
+  const newFile = {
+    id: fileId, applicant, raisedBy, branch, remark,
+    raisedAt: Date.now(),
+    status: "awaiting",
+    docs: checked.map(type=>({type, received:false})),
+    resolvedAt: null
+  };
+  state.files.unshift(newFile);
+  state.selectedCustomerFile = fileId;
+  state.activeTab = "chat";
+  render();
+  pushFile(newFile);
 }
 
 /* ============ CUSTOMER CHANNEL ============ */
@@ -509,17 +463,17 @@ function renderChat(){
   const pendingDocs = f.docs.filter(d=>!d.received);
   const docOptions = pendingDocs.map(d=>`<option value="${d.type}">${d.type}</option>`).join("");
 
-  const checklistMsg = `<div class="msg bot"><b>Bridge:</b> Hi ${f.applicant}, your file needs a couple of documents to move forward:<ul>${f.docs.map(d=>`<li>${d.type} — ${d.reason}</li>`).join("")}</ul>Please reply with a photo of each.</div>`;
+  const checklistMsg = `<div class="msg bot"><b>Bridge:</b> Hi ${f.applicant}, your file needs the following to move forward:<ul>${f.docs.map(d=>`<li>${d.type}</li>`).join("")}</ul>${f.remark ? `<i>Note: ${f.remark}</i>`:""}</div>`;
   const uploadedMsgs = f.docs.filter(d=>d.received).map(d=>
-    `<div class="msg customer">📎 ${d.type} uploaded</div><div class="msg pass">✓ Validated — matches request, legible, correct applicant</div>`
+    `<div class="msg customer">📎 ${d.type} uploaded</div><div class="msg pass">✓ Validated</div>`
   ).join("");
-  const resubmitMsg = f.status==="resubmitted" ? `<div class="msg system">All documents validated — file resubmitted to credit queue.</div>` : "";
+  const resubmitMsg = f.status==="resubmitted" ? `<div class="msg system">All items resolved — file resubmitted to credit queue.</div>` : "";
 
   const controls = f.status!=="resubmitted" ? `
     <div class="chat-controls">
-      <label>Simulate customer uploading a document</label>
+      <label>Simulate customer resolving an item</label>
       <select id="chat-doc-select">${docOptions}</select>
-      <button class="btn-primary" onclick="simulateUpload('${f.id}')">Upload Document</button>
+      <button class="btn-primary" onclick="simulateUpload('${f.id}')">Mark Resolved</button>
     </div>` : `<div class="chat-controls"><div class="empty-state" style="padding:14px;">File resolved — resubmitted to credit.</div></div>`;
 
   return `
@@ -543,7 +497,7 @@ async function simulateUpload(fileId){
   if(!sel || !sel.value) return;
   const f = state.files.find(x=>x.id===fileId);
   const doc = f.docs.find(d=>d.type===sel.value);
-  if(doc) doc.received = true;
+  if(doc){ doc.received = true; doc.receivedAt = Date.now(); }
   if(f.docs.every(d=>d.received)){
     f.status = "resubmitted";
     f.resolvedAt = Date.now();
@@ -569,21 +523,26 @@ function renderAdmin(){
     <div class="kpi"><div class="label">Escalation Rate</div><div class="value ${overallEscalationRate>20?'bad':''}">${overallEscalationRate}%</div><div class="delta">files that crossed the 5-day SLA</div></div>
   </div>`;
 
-  const memberRows = TEAM_MEMBERS.map(name=>{
-    const files = state.files.filter(f=>f.raisedBy===name);
-    const resolved = files.filter(f=>f.status==="resubmitted" && f.resolvedAt);
-    const avg = resolved.length ? (resolved.reduce((s,f)=>s+((f.resolvedAt-f.raisedAt)/86400000),0)/resolved.length).toFixed(1) : null;
-    const escalated = files.filter(f=>isEscalated(f)).length;
-    return {name, count:files.length, avg, escalated};
-  }).sort((a,b)=>b.count-a.count);
+  function rollupTable(groupField, groupList){
+    const rows = groupList.map(name=>{
+      const files = state.files.filter(f=>f[groupField]===name);
+      const resolved = files.filter(f=>f.status==="resubmitted" && f.resolvedAt);
+      const avg = resolved.length ? (resolved.reduce((s,f)=>s+((f.resolvedAt-f.raisedAt)/86400000),0)/resolved.length).toFixed(1) : null;
+      const escalated = files.filter(f=>isEscalated(f)).length;
+      return {name, count:files.length, avg, escalated};
+    }).sort((a,b)=>b.count-a.count);
 
-  const memberTable = memberRows.map(m=>`
-    <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:10px;align-items:center;padding:10px 4px;border-bottom:1px solid var(--border);font-size:13px;">
-      <div style="font-weight:600;">${m.name}</div>
-      <div class="mono">${m.count}</div>
-      <div class="mono">${m.avg!==null ? m.avg+"d" : "—"}</div>
-      <div class="mono" style="color:${m.escalated>0?'var(--bad)':'var(--ink-faint)'};">${m.escalated}</div>
-    </div>`).join("");
+    return rows.map(m=>`
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:10px;align-items:center;padding:9px 4px;border-bottom:1px solid var(--border);font-size:12.5px;">
+        <div style="font-weight:600;">${m.name}</div>
+        <div class="mono">${m.count}</div>
+        <div class="mono">${m.avg!==null ? m.avg+"d" : "—"}</div>
+        <div class="mono" style="color:${m.escalated>0?'var(--bad)':'var(--ink-faint)'};">${m.escalated}</div>
+      </div>`).join("");
+  }
+
+  const memberTable = rollupTable("raisedBy", TEAM_MEMBERS);
+  const branchTable = rollupTable("branch", BRANCHES.filter(b=>state.files.some(f=>f.branch===b)));
 
   const freq = {};
   state.files.forEach(f=>f.docs.forEach(d=>{ freq[d.type] = (freq[d.type]||0)+1; }));
@@ -600,7 +559,7 @@ function renderAdmin(){
     </div>`).join("");
 
   return `
-    <div class="note-strip"><b>Pilot rollup.</b> Aggregates every file in the shared sheet across the full 15-person credit team roster — refresh to pull the latest.</div>
+    <div class="note-strip"><b>Pilot rollup.</b> Aggregates every file in the shared sheet. The underlying Sheet has the same data in structured columns if you'd rather filter/pivot there directly.</div>
     ${kpis}
     <div class="two-col">
       <div class="panel">
@@ -611,9 +570,16 @@ function renderAdmin(){
         ${memberTable}
       </div>
       <div class="panel">
-        <h2 class="section-title">Document Types Driving Requests</h2>
-        ${freqEntries.length ? freqBars : `<div class="empty-state">No queries logged yet.</div>`}
+        <h2 class="section-title">By Branch</h2>
+        <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:10px;padding:0 4px 8px;font-size:11px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:0.4px;font-weight:700;border-bottom:2px solid var(--border);">
+          <div>Branch</div><div>Files</div><div>Avg TAT</div><div>Escalated</div>
+        </div>
+        ${branchTable || `<div class="empty-state">No files logged yet.</div>`}
       </div>
+    </div>
+    <div class="panel" style="margin-top:16px;">
+      <h2 class="section-title">Query Types Driving Requests</h2>
+      ${freqEntries.length ? freqBars : `<div class="empty-state">No queries logged yet.</div>`}
     </div>
   `;
 }
@@ -630,7 +596,7 @@ function render(){
   const syncEl = document.getElementById("sync-status");
   if(syncEl) syncEl.textContent = isConfigured()
     ? "Document Resolution Console — Live Pilot"
-    : "Document Resolution Console — Backend not connected (see SETUP-STEPS.md)";
+    : "Document Resolution Console — Backend not connected";
 }
 
 loadFiles();
