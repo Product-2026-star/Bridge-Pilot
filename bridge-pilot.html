@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Bridge — Live Pilot (Shared via Google Sheet)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#EDEFF3;
+    --panel:#FFFFFF;
+    --ink:#16202B;
+    --ink-soft:#5B6472;
+    --ink-faint:#8B93A1;
+    --accent:#2B4570;
+    --accent-soft:#E7ECF3;
+    --accent-line:#C7D3E3;
+    --good:#2F7D5C;
+    --good-bg:#E6F3EC;
+    --warn:#B4780F;
+    --warn-bg:#FBF0DE;
+    --bad:#B23B3B;
+    --bad-bg:#FBE8E6;
+    --border:#DDE1E7;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Inter',sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:'JetBrains Mono',monospace;}
+  .display{font-family:'Space Grotesk',sans-serif;}
+
+  /* ---------- Header ---------- */
+  header{
+    background:var(--ink);
+    color:#fff;
+    padding:16px 28px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:12px;
+  }
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand-mark{
+    width:34px;height:34px;border-radius:9px;
+    background:linear-gradient(135deg,#3E6E64,#2B4570);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:16px;
+    flex-shrink:0;
+  }
+  .brand-text .name{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:18px;letter-spacing:0.2px;}
+  .brand-text .sub{font-size:11.5px;color:#AEB8C6;letter-spacing:0.3px;}
+
+  nav.tabs{display:flex;gap:4px;background:rgba(255,255,255,0.06);padding:4px;border-radius:10px;}
+  nav.tabs button{
+    background:transparent;border:none;color:#C7CEDA;
+    padding:8px 16px;border-radius:8px;font-size:13.5px;font-weight:600;
+    cursor:pointer;font-family:'Inter',sans-serif;transition:all .15s ease;
+  }
+  nav.tabs button.active{background:#fff;color:var(--ink);}
+  nav.tabs button:not(.active):hover{color:#fff;}
+
+  .header-controls{display:flex;gap:8px;align-items:center;}
+  .btn-ghost{
+    background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);
+    color:#fff;padding:8px 14px;border-radius:8px;font-size:12.5px;font-weight:600;
+    cursor:pointer;font-family:'Inter',sans-serif;
+  }
+  .btn-ghost:hover{background:rgba(255,255,255,0.16);}
+
+  main{max-width:1180px;margin:0 auto;padding:28px 24px 60px;}
+
+  .note-strip{
+    background:var(--accent-soft);border:1px solid var(--accent-line);
+    border-radius:10px;padding:12px 16px;font-size:12.5px;color:var(--ink-soft);
+    margin-bottom:22px;line-height:1.55;
+  }
+  .note-strip b{color:var(--ink);}
+
+  /* ---------- KPI row ---------- */
+  .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:26px;}
+  .kpi{
+    background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
+    padding:18px 20px;
+  }
+  .kpi .label{font-size:11.5px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:0.6px;font-weight:600;}
+  .kpi .value{font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:700;margin-top:6px;}
+  .kpi .value.good{color:var(--good);}
+  .kpi .value.bad{color:var(--bad);}
+  .kpi .delta{font-size:12px;color:var(--ink-faint);margin-top:4px;}
+
+  h2.section-title{font-family:'Space Grotesk',sans-serif;font-size:16px;margin:0 0 14px;display:flex;align-items:center;gap:10px;}
+  h2.section-title .count{
+    font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--accent-soft);
+    color:var(--accent);padding:2px 8px;border-radius:20px;font-weight:700;
+  }
+
+  /* ---------- Ledger cards ---------- */
+  .grid-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;}
+  .card{
+    background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
+    padding:18px;position:relative;
+  }
+  .card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+  .card-top .who{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15px;}
+  .card-top .fid{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--ink-faint);margin-top:2px;}
+
+  .ring-wrap{position:relative;width:58px;height:58px;flex-shrink:0;}
+  .ring-wrap svg{transform:rotate(-90deg);}
+  .ring-center{
+    position:absolute;top:0;left:0;width:100%;height:100%;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+  }
+  .ring-center .d{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px;line-height:1;}
+  .ring-center .lbl{font-size:8px;color:var(--ink-faint);letter-spacing:0.3px;margin-top:1px;}
+
+  .badge{
+    display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;
+    margin-top:10px;letter-spacing:0.2px;
+  }
+  .badge.awaiting{background:var(--warn-bg);color:var(--warn);}
+  .badge.uploaded{background:var(--accent-soft);color:var(--accent);}
+  .badge.resubmitted{background:var(--good-bg);color:var(--good);}
+  .badge.escalated{background:var(--bad-bg);color:var(--bad);}
+
+  .doc-list{margin-top:12px;font-size:12.5px;}
+  .doc-item{display:flex;align-items:center;gap:7px;padding:3px 0;color:var(--ink-soft);}
+  .doc-item.done{color:var(--ink-faint);text-decoration:line-through;}
+  .doc-dot{width:6px;height:6px;border-radius:50%;background:var(--warn);flex-shrink:0;}
+  .doc-item.done .doc-dot{background:var(--good);}
+
+  .timeline{display:flex;gap:4px;margin-top:14px;}
+  .timeline .seg{flex:1;height:4px;border-radius:3px;background:var(--border);}
+  .timeline .seg.on{background:var(--accent);}
+
+  .escal-flag{
+    margin-top:12px;background:var(--bad-bg);color:var(--bad);font-size:11.5px;font-weight:600;
+    padding:6px 10px;border-radius:8px;
+  }
+
+  /* ---------- Panels (Raise Query / Customer Channel) ---------- */
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:24px;}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;}
+  @media(max-width:820px){.two-col{grid-template-columns:1fr;}}
+
+  label{font-size:12.5px;font-weight:600;color:var(--ink-soft);display:block;margin-bottom:6px;}
+  input[type=text], textarea, select{
+    width:100%;border:1px solid var(--border);border-radius:9px;padding:10px 12px;
+    font-family:'Inter',sans-serif;font-size:13.5px;color:var(--ink);background:#FBFCFD;
+    margin-bottom:16px;
+  }
+  textarea{resize:vertical;min-height:110px;line-height:1.5;}
+  input:focus, textarea:focus, select:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent);}
+
+  .btn-primary{
+    background:var(--accent);color:#fff;border:none;padding:11px 20px;border-radius:9px;
+    font-weight:700;font-size:13.5px;cursor:pointer;font-family:'Inter',sans-serif;
+  }
+  .btn-primary:hover{background:#233a5c;}
+  .btn-primary:disabled{opacity:0.55;cursor:not-allowed;}
+  .btn-secondary{
+    background:#fff;color:var(--accent);border:1.5px solid var(--accent-line);padding:9px 16px;
+    border-radius:9px;font-weight:700;font-size:13px;cursor:pointer;font-family:'Inter',sans-serif;
+  }
+
+  .result-box{
+    margin-top:18px;border:1px solid var(--accent-line);background:var(--accent-soft);
+    border-radius:10px;padding:16px;font-size:13px;
+  }
+  .result-box .rtitle{font-weight:700;font-size:12.5px;color:var(--accent);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.4px;}
+  .result-doc{background:#fff;border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:8px;}
+  .result-doc .t{font-weight:700;font-size:13px;}
+  .result-doc .r{color:var(--ink-soft);font-size:12px;margin-top:2px;}
+
+  .spinner{
+    width:14px;height:14px;border:2px solid rgba(255,255,255,0.4);border-top-color:#fff;
+    border-radius:50%;display:inline-block;animation:spin .7s linear infinite;margin-right:8px;vertical-align:-2px;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* ---------- Chat ---------- */
+  .chat-window{
+    border:1px solid var(--border);border-radius:12px;background:#F7F8FA;
+    padding:16px;min-height:340px;display:flex;flex-direction:column;gap:10px;
+  }
+  .msg{max-width:80%;padding:10px 13px;border-radius:12px;font-size:13px;line-height:1.5;}
+  .msg.system{background:#fff;border:1px solid var(--border);color:var(--ink-soft);align-self:center;font-size:11.5px;text-align:center;max-width:90%;}
+  .msg.bot{background:#fff;border:1px solid var(--border);align-self:flex-start;border-bottom-left-radius:3px;}
+  .msg.customer{background:var(--accent);color:#fff;align-self:flex-end;border-bottom-right-radius:3px;}
+  .msg.fail{background:var(--bad-bg);color:var(--bad);align-self:flex-start;border-bottom-left-radius:3px;font-weight:600;}
+  .msg.pass{background:var(--good-bg);color:var(--good);align-self:flex-start;border-bottom-left-radius:3px;font-weight:600;}
+  .msg ul{margin:6px 0 0;padding-left:18px;}
+
+  .chat-controls{margin-top:16px;padding-top:16px;border-top:1px solid var(--border);}
+  .empty-state{color:var(--ink-faint);font-size:13px;text-align:center;padding:60px 20px;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="brand-mark">B</div>
+    <div class="brand-text">
+      <div class="name">Bridge</div>
+      <div class="sub" id="sync-status">Document Resolution Console — Live Pilot</div>
+    </div>
+  </div>
+  <nav class="tabs" id="tabnav"></nav>
+  <div class="header-controls">
+    <button class="btn-ghost" onclick="loadFiles()">Refresh</button>
+  </div>
+</header>
+
+<main id="app"></main>
+
+<script>
+/* ============================================================
+   CONFIG — fill these in after deploying bridge-backend.gs
+   See SETUP-STEPS.md
+   ============================================================ */
+const BACKEND_URL = "https://script.google.com/macros/s/AKfycbziEqs_dXOMnEG89IrvBi0oxc8JmyfZgsHwlPozuZZtoTvTGGtZSEImZCGTfxedKeuoMQ/exec";
+const API_KEY = "bridge-pilot-2026";
+
+function isConfigured(){
+  return BACKEND_URL && !BACKEND_URL.includes("PASTE_YOUR");
+}
+
+/* ============ CONSTANTS ============ */
+const TEAM_MEMBERS = [
+  "Anjali Mehta","Bhavesh Solanki","Chirag Desai","Devanshi Trivedi","Falguni Rawal",
+  "Gaurav Joshi","Harshad Vyas","Isha Kapadia","Jignesh Patel","Kavya Iyer",
+  "Lalit Chauhan","Manisha Bhatt","Nikhil Shah","Omkar Pandya","Priya Sharma"
+];
+
+const DOC_KEYWORDS = [
+  {keys:["salary slip","salary slips","payslip"], type:"Latest Salary Slip (3 months)"},
+  {keys:["bank statement","bank stmt","account statement"], type:"Bank Statement (6 months)"},
+  {keys:["gst"], type:"GST Certificate"},
+  {keys:["itr","income tax return"], type:"ITR (2 years)"},
+  {keys:["aadhaar","aadhar"], type:"Aadhaar Card"},
+  {keys:["pan card","pan number","pan "], type:"PAN Card"},
+  {keys:["address proof","residence proof","utility bill"], type:"Address Proof"},
+  {keys:["photograph","photo "], type:"Photograph"}
+];
+const URGENT_WORDS = ["urgent","immediately","asap","priority","today itself"];
+const LOW_PRIORITY_WORDS = ["whenever","no rush","low priority","not urgent"];
+
+/* ============ STATE ============ */
+let state = {
+  files: [],
+  activeTab: "console",
+  selectedCustomerFile: null,
+  loading: true,
+  syncError: null,
+  parseLoading: false,
+  parseError: null,
+  parseResult: null
+};
+
+/* ============ BACKEND SYNC ============ */
+async function loadFiles(){
+  if(!isConfigured()){
+    state.loading = false;
+    render();
+    return;
+  }
+  try{
+    const res = await fetch(BACKEND_URL);
+    const data = await res.json();
+    if(Array.isArray(data)){
+      state.files = data;
+      state.syncError = null;
+    }
+  }catch(err){
+    state.syncError = "Couldn't reach the shared sheet (" + err.message + "). Check your connection and BACKEND_URL.";
+  }
+  state.loading = false;
+  render();
+}
+
+async function pushFile(file){
+  if(!isConfigured()) return;
+  try{
+    await fetch(BACKEND_URL, {
+      method: "POST",
+      headers: {"Content-Type": "text/plain;charset=utf-8"}, // avoids CORS preflight against Apps Script
+      body: JSON.stringify({key: API_KEY, file})
+    });
+    state.syncError = null;
+  }catch(err){
+    state.syncError = "Saved locally but couldn't sync to the shared sheet (" + err.message + ").";
+    render();
+  }
+}
+
+/* ============ TIME / STATUS HELPERS (real timestamps, not simulated days) ============ */
+function ageOf(f){
+  const end = f.resolvedAt || Date.now();
+  return Math.max(0, Math.floor((end - f.raisedAt) / 86400000));
+}
+function isEscalated(f){
+  return f.status !== "resubmitted" && ageOf(f) >= 6;
+}
+function statusColor(age){
+  if(age<=2) return {c:"good", hex:"#2F7D5C"};
+  if(age<=5) return {c:"warn", hex:"#B4780F"};
+  return {c:"bad", hex:"#B23B3B"};
+}
+function avgAge(){
+  const active = state.files.filter(f=>f.status!=="resubmitted");
+  if(active.length===0) return 0;
+  return (active.reduce((s,f)=>s+ageOf(f),0)/active.length).toFixed(1);
+}
+
+/* ============ LOCAL QUERY PARSER (no network dependency for this step) ============ */
+function parseRemarkLocally(remark){
+  const sentences = remark.split(/(?<=[.;])\s+|\n/).map(s=>s.trim()).filter(Boolean);
+  const found = [];
+  const seenTypes = new Set();
+  sentences.forEach(sentence=>{
+    const lower = sentence.toLowerCase();
+    DOC_KEYWORDS.forEach(entry=>{
+      if(entry.keys.some(k=>lower.includes(k)) && !seenTypes.has(entry.type)){
+        seenTypes.add(entry.type);
+        found.push({type:entry.type, reason: sentence});
+      }
+    });
+  });
+  if(found.length===0) found.push({type:"Additional Document (specify with RM)", reason: remark});
+  const lowerRemark = remark.toLowerCase();
+  let urgency_days = 5;
+  if(URGENT_WORDS.some(w=>lowerRemark.includes(w))) urgency_days = 3;
+  else if(LOW_PRIORITY_WORDS.some(w=>lowerRemark.includes(w))) urgency_days = 7;
+  return {documents:found, urgency_days};
+}
+
+/* ============ RING SVG ============ */
+function ring(age, target=7){
+  const pct = Math.min(age/target,1);
+  const r=24, circ=2*Math.PI*r;
+  const dash = circ*pct;
+  const col = statusColor(age).hex;
+  return `<div class="ring-wrap">
+    <svg width="58" height="58" viewBox="0 0 58 58">
+      <circle cx="29" cy="29" r="${r}" fill="none" stroke="#E4E7EC" stroke-width="5"/>
+      <circle cx="29" cy="29" r="${r}" fill="none" stroke="${col}" stroke-width="5"
+        stroke-dasharray="${dash} ${circ}" stroke-linecap="round"/>
+    </svg>
+    <div class="ring-center"><div class="d" style="color:${col}">${age}</div><div class="lbl">DAYS</div></div>
+  </div>`;
+}
+
+/* ============ TAB NAV ============ */
+function renderTabNav(){
+  const tabs=[["console","Console"],["query","Raise Query"],["chat","Customer Channel"],["admin","Admin View"]];
+  document.getElementById("tabnav").innerHTML = tabs.map(([k,label])=>
+    `<button class="${state.activeTab===k?'active':''}" onclick="setTab('${k}')">${label}</button>`
+  ).join("");
+}
+function setTab(t){ state.activeTab=t; render(); }
+
+/* ============ CONSOLE ============ */
+function renderConsole(){
+  const activeFiles = state.files.filter(f=>f.status!=="resubmitted");
+  const escalated = state.files.filter(f=>isEscalated(f)).length;
+  const resolved = state.files.filter(f=>f.status==="resubmitted").length;
+
+  const kpis = `
+  <div class="kpi-row">
+    <div class="kpi"><div class="label">In Document-Pending</div><div class="value">${activeFiles.length}</div><div class="delta">files currently with customer</div></div>
+    <div class="kpi"><div class="label">Avg. Days Aging</div><div class="value ${avgAge()>5?'bad':'good'}">${avgAge()}</div><div class="delta">baseline (manual RM coordination): ~18–21 days</div></div>
+    <div class="kpi"><div class="label">Escalated (&gt;5 days)</div><div class="value ${escalated>0?'bad':''}">${escalated}</div><div class="delta">auto-flagged to branch manager</div></div>
+    <div class="kpi"><div class="label">Resubmitted to Credit</div><div class="value good">${resolved}</div><div class="delta">closed via this flow</div></div>
+  </div>`;
+
+  const cards = state.files.map(f=>{
+    const age = ageOf(f);
+    const escal = isEscalated(f);
+    const doneCount = f.docs.filter(d=>d.received).length;
+    let badge;
+    if(f.status==="resubmitted") badge = `<span class="badge resubmitted">Resubmitted to credit</span>`;
+    else if(escal) badge = `<span class="badge escalated">Escalated</span>`;
+    else if(doneCount>0 && doneCount<f.docs.length) badge = `<span class="badge uploaded">Partially received</span>`;
+    else badge = `<span class="badge awaiting">Awaiting customer</span>`;
+
+    const docList = f.docs.map(d=>`<div class="doc-item ${d.received?'done':''}"><span class="doc-dot"></span>${d.type}</div>`).join("");
+
+    const steps = ["Raised","Notified","Received","Validated","Resubmitted"];
+    let activeSteps = 1;
+    if(f.status==="resubmitted") activeSteps=5;
+    else if(doneCount===f.docs.length && f.docs.length>0) activeSteps=4;
+    else if(doneCount>0) activeSteps=3;
+    const timeline = `<div class="timeline">${steps.map((s,i)=>`<div class="seg ${i<activeSteps?'on':''}"></div>`).join("")}</div>`;
+
+    return `<div class="card">
+      <div class="card-top">
+        <div><div class="who">${f.applicant}</div><div class="fid mono">${f.id}</div><div style="font-size:11px;color:var(--ink-faint);margin-top:2px;">${f.raisedBy||"—"}</div></div>
+        ${f.status==="resubmitted" ? `<div style="font-size:22px">✅</div>` : ring(age)}
+      </div>
+      ${badge}
+      <div class="doc-list">${docList}</div>
+      ${timeline}
+      ${escal ? `<div class="escal-flag">⚠ Past SLA — branch manager notified</div>` : ""}
+    </div>`;
+  }).join("");
+
+  const configWarning = !isConfigured() ? `
+    <div class="note-strip" style="background:var(--bad-bg);border-color:var(--bad);color:var(--bad);">
+      <b>Backend not connected.</b> Set <code>BACKEND_URL</code> at the top of this file's script section to your deployed Google Apps Script Web App URL — see SETUP-STEPS.md. Until then, nothing syncs between team members.
+    </div>` : "";
+  const syncWarning = state.syncError ? `<div class="note-strip" style="background:var(--warn-bg);border-color:var(--warn);color:var(--warn);">${state.syncError}</div>` : "";
+
+  return `
+    ${configWarning}
+    ${syncWarning}
+    <div class="note-strip"><b>Live pilot data.</b> This reads from and writes to your shared Google Sheet — every credit team member sees the same queue. Refreshes automatically every 30 seconds, or click <b>Refresh</b> in the header.</div>
+    ${kpis}
+    <h2 class="section-title">Live Queue <span class="count">${state.files.length} files</span></h2>
+    ${state.loading ? `<div class="empty-state">Loading shared data…</div>` : (state.files.length ? `<div class="grid-cards">${cards}</div>` : `<div class="empty-state">No files logged yet. Raise a query to get started.</div>`)}
+  `;
+}
+
+/* ============ RAISE QUERY ============ */
+function renderQuery(){
+  return `
+  <div class="panel">
+    <h2 class="section-title">Credit Team — Raise a Document Query</h2>
+    <div class="two-col">
+      <div>
+        <label>Raised by (credit team member)</label>
+        <select id="q-teammember">${TEAM_MEMBERS.map(m=>`<option value="${m}">${m}</option>`).join("")}</select>
+        <label>File ID</label>
+        <input type="text" id="q-fileid" placeholder="e.g. FL-10301">
+        <label>Applicant Name</label>
+        <input type="text" id="q-applicant" placeholder="e.g. Nilesh Rana">
+        <label>Credit remark (write it exactly as you normally would)</label>
+        <textarea id="q-remark" placeholder="e.g. Salary slip submitted is old, need latest 3 months. Also bank statement account number not matching application for this customer."></textarea>
+        <button class="btn-primary" id="q-submit" onclick="processQuery()">${state.parseLoading?'<span class="spinner"></span>Structuring…':'Process Query'}</button>
+      </div>
+      <div>
+        ${state.parseError ? `<div class="result-box" style="border-color:var(--bad);background:var(--bad-bg);color:var(--bad);">${state.parseError}</div>` : ""}
+        ${state.parseResult ? renderParseResult(state.parseResult) : `<div class="empty-state">The structured checklist generated from the remark will appear here, then sync to the shared sheet and route to the Customer Channel.</div>`}
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderParseResult(r){
+  const docs = r.documents.map(d=>`<div class="result-doc"><div class="t">${d.type}</div><div class="r">${d.reason}</div></div>`).join("");
+  return `<div class="result-box">
+    <div class="rtitle">Auto-structured · urgency: ${r.urgency_days} day target</div>
+    ${docs}
+    <div style="margin-top:10px;font-size:12px;color:var(--ink-soft);">✓ Synced to shared sheet. Switch to <b>Customer Channel</b> to see it.</div>
+  </div>`;
+}
+
+function processQuery(){
+  const fileId = document.getElementById("q-fileid").value.trim() || `FL-${Math.floor(10000+Math.random()*89999)}`;
+  const applicant = document.getElementById("q-applicant").value.trim() || "Unnamed Applicant";
+  const raisedBy = document.getElementById("q-teammember").value;
+  const remark = document.getElementById("q-remark").value.trim();
+  if(!remark){ state.parseError = "Enter a credit remark first."; render(); return; }
+
+  state.parseLoading = true; state.parseError = null; state.parseResult = null; render();
+
+  setTimeout(async ()=>{
+    try{
+      const parsed = parseRemarkLocally(remark);
+      state.parseResult = parsed;
+      state.parseLoading = false;
+
+      const newFile = {
+        id: fileId, applicant, raisedBy,
+        raisedAt: Date.now(),
+        status: "awaiting",
+        docs: parsed.documents.map(d=>({type:d.type, reason:d.reason, received:false})),
+        resolvedAt: null
+      };
+      state.files.unshift(newFile);
+      state.selectedCustomerFile = fileId;
+      render();
+      await pushFile(newFile);
+    }catch(err){
+      state.parseLoading = false;
+      state.parseError = "Couldn't parse that remark (" + err.message + "). Try rephrasing it.";
+      render();
+    }
+  }, 400);
+}
+
+/* ============ CUSTOMER CHANNEL ============ */
+function renderChat(){
+  const openFiles = state.files.filter(f=>f.status!=="resubmitted");
+  if(openFiles.length===0){
+    return `<div class="panel"><div class="empty-state">No files currently awaiting customer documents.</div></div>`;
+  }
+  if(!state.selectedCustomerFile || !openFiles.find(f=>f.id===state.selectedCustomerFile)){
+    state.selectedCustomerFile = openFiles[0].id;
+  }
+  const f = state.files.find(x=>x.id===state.selectedCustomerFile);
+  const options = openFiles.map(x=>`<option value="${x.id}" ${x.id===f.id?'selected':''}>${x.id} — ${x.applicant}</option>`).join("");
+  const pendingDocs = f.docs.filter(d=>!d.received);
+  const docOptions = pendingDocs.map(d=>`<option value="${d.type}">${d.type}</option>`).join("");
+
+  const checklistMsg = `<div class="msg bot"><b>Bridge:</b> Hi ${f.applicant}, your file needs a couple of documents to move forward:<ul>${f.docs.map(d=>`<li>${d.type} — ${d.reason}</li>`).join("")}</ul>Please reply with a photo of each.</div>`;
+  const uploadedMsgs = f.docs.filter(d=>d.received).map(d=>
+    `<div class="msg customer">📎 ${d.type} uploaded</div><div class="msg pass">✓ Validated — matches request, legible, correct applicant</div>`
+  ).join("");
+  const resubmitMsg = f.status==="resubmitted" ? `<div class="msg system">All documents validated — file resubmitted to credit queue.</div>` : "";
+
+  const controls = f.status!=="resubmitted" ? `
+    <div class="chat-controls">
+      <label>Simulate customer uploading a document</label>
+      <select id="chat-doc-select">${docOptions}</select>
+      <button class="btn-primary" onclick="simulateUpload('${f.id}')">Upload Document</button>
+    </div>` : `<div class="chat-controls"><div class="empty-state" style="padding:14px;">File resolved — resubmitted to credit.</div></div>`;
+
+  return `
+  <div class="panel">
+    <h2 class="section-title">Customer Channel <span class="count">${f.id}</span></h2>
+    <label>Active file</label>
+    <select onchange="selectCustomerFile(this.value)">${options}</select>
+    <div class="chat-window">
+      ${checklistMsg}
+      ${uploadedMsgs}
+      ${resubmitMsg}
+    </div>
+    ${controls}
+  </div>`;
+}
+
+function selectCustomerFile(id){ state.selectedCustomerFile = id; render(); }
+
+async function simulateUpload(fileId){
+  const sel = document.getElementById("chat-doc-select");
+  if(!sel || !sel.value) return;
+  const f = state.files.find(x=>x.id===fileId);
+  const doc = f.docs.find(d=>d.type===sel.value);
+  if(doc) doc.received = true;
+  if(f.docs.every(d=>d.received)){
+    f.status = "resubmitted";
+    f.resolvedAt = Date.now();
+  }
+  render();
+  await pushFile(f);
+}
+
+/* ============ ADMIN VIEW ============ */
+function renderAdmin(){
+  const resolvedFiles = state.files.filter(f=>f.status==="resubmitted" && f.resolvedAt);
+  const overallAvg = resolvedFiles.length
+    ? (resolvedFiles.reduce((s,f)=>s+((f.resolvedAt-f.raisedAt)/86400000),0)/resolvedFiles.length).toFixed(1)
+    : "—";
+  const overallEscalationRate = state.files.length
+    ? ((state.files.filter(f=>isEscalated(f)).length/state.files.length)*100).toFixed(0)
+    : 0;
+
+  const kpis = `
+  <div class="kpi-row">
+    <div class="kpi"><div class="label">Pilot Files Logged</div><div class="value">${state.files.length}</div><div class="delta">across ${TEAM_MEMBERS.length} credit team members</div></div>
+    <div class="kpi"><div class="label">Avg. Resolution Time</div><div class="value good">${overallAvg}${overallAvg!=="—"?" days":""}</div><div class="delta">query raised → resubmitted to credit</div></div>
+    <div class="kpi"><div class="label">Escalation Rate</div><div class="value ${overallEscalationRate>20?'bad':''}">${overallEscalationRate}%</div><div class="delta">files that crossed the 5-day SLA</div></div>
+  </div>`;
+
+  const memberRows = TEAM_MEMBERS.map(name=>{
+    const files = state.files.filter(f=>f.raisedBy===name);
+    const resolved = files.filter(f=>f.status==="resubmitted" && f.resolvedAt);
+    const avg = resolved.length ? (resolved.reduce((s,f)=>s+((f.resolvedAt-f.raisedAt)/86400000),0)/resolved.length).toFixed(1) : null;
+    const escalated = files.filter(f=>isEscalated(f)).length;
+    return {name, count:files.length, avg, escalated};
+  }).sort((a,b)=>b.count-a.count);
+
+  const memberTable = memberRows.map(m=>`
+    <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:10px;align-items:center;padding:10px 4px;border-bottom:1px solid var(--border);font-size:13px;">
+      <div style="font-weight:600;">${m.name}</div>
+      <div class="mono">${m.count}</div>
+      <div class="mono">${m.avg!==null ? m.avg+"d" : "—"}</div>
+      <div class="mono" style="color:${m.escalated>0?'var(--bad)':'var(--ink-faint)'};">${m.escalated}</div>
+    </div>`).join("");
+
+  const freq = {};
+  state.files.forEach(f=>f.docs.forEach(d=>{ freq[d.type] = (freq[d.type]||0)+1; }));
+  const freqEntries = Object.entries(freq).sort((a,b)=>b[1]-a[1]);
+  const maxCount = freqEntries.length ? freqEntries[0][1] : 1;
+  const freqBars = freqEntries.map(([type,count])=>`
+    <div style="margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px;">
+        <span>${type}</span><span class="mono" style="color:var(--ink-faint);">${count}</span>
+      </div>
+      <div style="background:var(--accent-soft);border-radius:6px;height:8px;overflow:hidden;">
+        <div style="background:var(--accent);height:100%;width:${(count/maxCount*100).toFixed(0)}%;"></div>
+      </div>
+    </div>`).join("");
+
+  return `
+    <div class="note-strip"><b>Pilot rollup.</b> Aggregates every file in the shared sheet across the full 15-person credit team roster — refresh to pull the latest.</div>
+    ${kpis}
+    <div class="two-col">
+      <div class="panel">
+        <h2 class="section-title">By Credit Team Member</h2>
+        <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:10px;padding:0 4px 8px;font-size:11px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:0.4px;font-weight:700;border-bottom:2px solid var(--border);">
+          <div>Member</div><div>Files</div><div>Avg TAT</div><div>Escalated</div>
+        </div>
+        ${memberTable}
+      </div>
+      <div class="panel">
+        <h2 class="section-title">Document Types Driving Requests</h2>
+        ${freqEntries.length ? freqBars : `<div class="empty-state">No queries logged yet.</div>`}
+      </div>
+    </div>
+  `;
+}
+
+/* ============ MAIN RENDER ============ */
+function render(){
+  renderTabNav();
+  const app = document.getElementById("app");
+  if(state.activeTab==="console") app.innerHTML = renderConsole();
+  else if(state.activeTab==="query") app.innerHTML = renderQuery();
+  else if(state.activeTab==="chat") app.innerHTML = renderChat();
+  else if(state.activeTab==="admin") app.innerHTML = renderAdmin();
+
+  const syncEl = document.getElementById("sync-status");
+  if(syncEl) syncEl.textContent = isConfigured()
+    ? "Document Resolution Console — Live Pilot"
+    : "Document Resolution Console — Backend not connected (see SETUP-STEPS.md)";
+}
+
+loadFiles();
+setInterval(loadFiles, 30000);
+</script>
+</body>
+</html>
